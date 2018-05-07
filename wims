@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import lz4.block
+import os
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument('path', type=str, nargs='?' if os.name == 'nt' else None, help='path to process')
+parser.add_argument('--show-titles', action='store_true', help='show titles of tabs')
+args = parser.parse_args()
+
+if args.path is None:
+    assert os.name == 'nt'
+    import configparser
+
+    profile_path = os.path.join(os.getenv('USERPROFILE'), 'AppData', 'Roaming', 'Mozilla', 'Firefox')
+    profiles = configparser.ConfigParser()
+    profiles.read(os.path.join(profile_path, 'profiles.ini'))
+    for section in profiles.sections():
+        if section != 'General' and profiles.get(section, 'Default') == '1':
+            default_profile = profiles.get(section, 'Path')
+            break
+    else:
+        assert False, 'Couldn\'t find default profile.'
+
+    path = os.path.join(profile_path, default_profile)
+    if os.path.isfile(os.path.join(path, 'sessionstore.jsonlz4')):
+        args.path = os.path.join(path, 'sessionstore.jsonlz4')
+    elif os.path.isfile(os.path.join(path, 'sessionstore-backups', 'recovery.jsonlz4')):
+        args.path = os.path.join(path, 'sessionstore-backups', 'recovery.jsonlz4')
+    else:
+        assert False, 'Couldn\'t find session store in default profile.'
+
+data = open(args.path, 'rb').read()
+assert data[:8] == b'mozLz40\0', 'Invalid session store file.'
+json = json.loads(lz4.block.decompress(data[8:]).decode('utf-8'))
+
+def acquire_session_data(session_data):
+    for window in session_data['windows']:
+        print('=== Window ===')
+        for tab in window['tabs']:
+            if 'index' in tab:
+                assert tab['index'] > 0
+                assert tab['index'] <= len(tab['entries']) or len(tab['entries']) == 0
+                if len(tab['entries']) > 0:
+                    entry = tab['entries'][tab['index']-1]
+                    row = entry['url']
+                    if args.show_titles:
+                        row = '%s\t%s' % (entry['title'], row)
+                    print(row)
+            if 'formdata' in tab and 'id' in tab['formdata'] and 'sessionData' in tab['formdata']['id']:
+                acquire_session_data(tab['formdata']['id']['sessionData'])
+
+acquire_session_data(json)
