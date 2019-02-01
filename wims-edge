@@ -21,57 +21,61 @@ if args.path is None:
     )
 
 for store in glob.glob(os.path.join(args.path, 'RecoveryStore.*.dat')):
-    with olefile.OleFileIO(store) as store_file:
-        for names in store_file.listdir('.'):
-            for name in names:
-                try:
-                    # This heuristic is fine for now.
-                    data = base64.b64decode(name, altchars='+#', validate=True)
-                except:
-                    """"""
-                else:
-                    print('=== Window ===')
-                    with store_file.openstream(name) as sub_file:
-                        while True:
-                            tab_id = sub_file.read(16)
-                            if len(tab_id) != 16:
-                                break
-                            tab = uuid.UUID(bytes_le=tab_id)
-                            tab_path = os.path.join(args.path, '{{{}}}.dat'.format(str(tab).upper()))
-                            assert os.path.isfile(tab_path)
-                            with olefile.OleFileIO(tab_path) as tab_file:
-                                info = []
-                                for names in tab_file.listdir('.'):
-                                    for name in names:
-                                        if name.startswith('TL') or name == 'TravelLog':
-                                            continue
-                                        info.append(name)
-                                assert len(info) == 1
-                                with tab_file.openstream(info[0]) as info_file:
-                                    info_file.seek(0x34)
-                                    directory_size = int.from_bytes(info_file.read(4), byteorder='little')
-                                    url_offset = None
-                                    title_offset = None
-                                    for i in range(directory_size):
-                                        index = int.from_bytes(info_file.read(4), byteorder='little')
-                                        offset = int.from_bytes(info_file.read(4), byteorder='little')
-                                        if index == 3:
-                                            url_offset = offset + 0x30
-                                        elif index == 5:
-                                            title_offset = offset + 0x30
-                                    assert not url_offset is None
-                                    assert not title_offset is None
-                                    info_file.seek(url_offset)
-                                    magic = int.from_bytes(info_file.read(4), byteorder='little')
-                                    assert magic == 0x1f
-                                    url_size = int.from_bytes(info_file.read(4), byteorder='little')
-                                    url = info_file.read(url_size*2).decode('utf-16le')
-                                    info_file.seek(title_offset)
-                                    magic = int.from_bytes(info_file.read(4), byteorder='little')
-                                    assert magic == 0x1f
-                                    title_size = int.from_bytes(info_file.read(4), byteorder='little')
-                                    title = info_file.read(title_size*2).decode('utf-16le')
-                                    row = url
-                                    if args.show_titles:
-                                        row = '%s\t%s' % (title, row)
-                                    print(row)
+    try:
+        with olefile.OleFileIO(store) as store_file:
+            for names in store_file.listdir('.'):
+                for name in names:
+                    try:
+                        # This heuristic is fine for now.
+                        data = base64.b64decode(name, altchars='+#', validate=True)
+                    except:
+                        """"""
+                    else:
+                        print('=== Window ===')
+                        with store_file.openstream(name) as sub_file:
+                            while True:
+                                tab_id = sub_file.read(16)
+                                if len(tab_id) != 16:
+                                    break
+                                tab = uuid.UUID(bytes_le=tab_id)
+                                tab_path = os.path.join(args.path, '{{{}}}.dat'.format(str(tab).upper()))
+                                assert os.path.isfile(tab_path)
+                                with olefile.OleFileIO(tab_path) as tab_file:
+                                    info = []
+                                    for names in tab_file.listdir('.'):
+                                        for name in names:
+                                            if name.startswith('TL') or name == 'TravelLog':
+                                                continue
+                                            info.append(name)
+                                    assert len(info) == 1
+                                    with tab_file.openstream(info[0]) as info_file:
+                                        info_file.seek(0x34)
+                                        directory_size = int.from_bytes(info_file.read(4), byteorder='little')
+                                        url_offset = None
+                                        title_offset = None
+                                        for i in range(directory_size):
+                                            index = int.from_bytes(info_file.read(4), byteorder='little')
+                                            offset = int.from_bytes(info_file.read(4), byteorder='little')
+                                            if index == 3:
+                                                url_offset = offset + 0x30
+                                            elif index == 5:
+                                                title_offset = offset + 0x30
+                                        assert not url_offset is None
+                                        assert not title_offset is None
+                                        info_file.seek(url_offset)
+                                        magic = int.from_bytes(info_file.read(4), byteorder='little')
+                                        assert magic == 0x1f
+                                        url_size = int.from_bytes(info_file.read(4), byteorder='little')
+                                        url = info_file.read(url_size*2).decode('utf-16le')
+                                        info_file.seek(title_offset)
+                                        magic = int.from_bytes(info_file.read(4), byteorder='little')
+                                        assert magic == 0x1f
+                                        title_size = int.from_bytes(info_file.read(4), byteorder='little')
+                                        title = info_file.read(title_size*2).decode('utf-16le')
+                                        row = url
+                                        if args.show_titles:
+                                            row = '%s\t%s' % (title, row)
+                                        print(row)
+    except PermissionError:
+        print('Permission error. You probably need to kill MicrosoftEdge.exe.')
+        break
